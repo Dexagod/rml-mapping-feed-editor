@@ -25,9 +25,6 @@ WORKDIR /app
 # jar
 COPY --from=build /build/target/rml-post-1.0.0.jar /app/target/rml-post-1.0.0.jar
 
-# mapping template (must exist in build context and not be excluded by .dockerignore)
-COPY --from=build /build/mapping.template.ttl /app/mapping.template.ttl
-
 # entrypoint script
 COPY --from=build /build/run.sh /app/run.sh
 RUN chmod +x /app/run.sh
