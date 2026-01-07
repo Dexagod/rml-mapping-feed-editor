@@ -10,15 +10,6 @@ COPY . .
 # Ensure scripts are executable, then build 
 RUN mvn -q -DskipTests package
 
-RUN echo "==== DEBUG ====" \
- && pwd \
- && mvn -q help:evaluate -Dexpression=project.packaging -DforceStdout \
- && mvn -q help:evaluate -Dexpression=project.build.finalName -DforceStdout \
- && echo "---- TARGET ----" \
- && ls -la target || true \
- && echo "---- ALL JARS ----" \
- && find /build -name "*.jar" -print
-
 # Optional: fail fast if the jar wasn't produced 
 RUN test -f /build/target/rml-post-1.0.0.jar
 
