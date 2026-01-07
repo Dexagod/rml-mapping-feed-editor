@@ -12,6 +12,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public final class RmlMapAndPost {
   
@@ -22,7 +23,11 @@ public final class RmlMapAndPost {
    
     Map<String, List<String>> a = parseArgsMulti(args);
 
-    URI inputUrl         = URI.create(require(a, "--inputUrl"));
+    List<String> inputUrlStrings = getMulti(a, "--inputUrl");
+    List<URI> inputUrls = inputUrlStrings.stream()
+        .map(el -> URI.create(el))
+        .collect(Collectors.toList()); 
+    // URI inputUrl         = URI.create(getMulti(a, "--inputUrl"));
     String mapping       = getSingle(a, "--mapping");
     URI postUrl          = URI.create(require(a, "--postUrl"));
     String serialization = getSingleOrDefault(a, "--serialization", "turtle");
@@ -36,7 +41,7 @@ public final class RmlMapAndPost {
     List<String> ontologies = getMulti(a, "--ontologies");
     List<String> shapes     = getMulti(a, "--shapes");
 
-    System.err.println("inputUrl=" + inputUrl);
+    System.err.println("inputUrl=" + inputUrls);
     System.err.println("mapping=" + mapping);
     System.err.println("postUrl=" + postUrl);
     System.err.println("feedUrl=" + feedUrl);
@@ -45,65 +50,65 @@ public final class RmlMapAndPost {
     System.err.println("shapes=" + shapes);
 
 
-    
-    Path tempMapping = Files.createTempFile("mapping-", ".ttl");
-    Files.writeString(tempMapping, mapping, StandardCharsets.UTF_8);
-    
-    // 2) Run RMLMapper in-process, capture stdout RDF
-    byte[] rdfBytes = runRmlMapperCaptureStdout(tempMapping, serialization);
-    
-    // 3) POST to server
-    String contentType = contentTypeFor(serialization);
-    
-    HttpClient client = HttpClient.newBuilder()
-    .connectTimeout(Duration.ofSeconds(20))
-    .build();
-    // ... inside main(), after rdfBytes/contentType/client are built:
-    
-    HttpRequest.Builder req = HttpRequest.newBuilder()
-    .uri(postUrl)
-    .timeout(Duration.ofMinutes(2))
-    .header("Content-Type", contentType)
-    .POST(HttpRequest.BodyPublishers.ofByteArray(rdfBytes));
-    
-    if (bearerToken != null && !bearerToken.isBlank()) {
-      req.header("Authorization", "Bearer " + bearerToken);
-    }
-    
-    HttpResponse<byte[]> resp = client.send(req.build(), HttpResponse.BodyHandlers.ofByteArray());
-    
-    System.err.println("POST " + postUrl + " -> HTTP " + resp.statusCode());
-    
-    // if (resp.body() != null && !resp.body().isBlank()) {
-    //   System.err.println(resp.body());
-    // }
-    
-    // Extract Location header (case-insensitive), resolve relative URI if needed
-    URI locationUri = extractLocationUri(resp, postUrl);
-    
-    if (locationUri == null) {
-      System.err.println("No Location header returned; skipping updateFeed().");
-      return;
-    }
-    
-    System.err.println("Location: " + locationUri);
-    String updateString = createUpdateString(
-      locationUri,
-      inputUrl,
-      title,
-      description,
-      keywords,
-      ontologies,
-      shapes,
-      feedUrl
-    );
+    for (URI inputUrl : inputUrls) {
+      Path tempMapping = Files.createTempFile("mapping-", ".ttl");
+      Files.writeString(tempMapping, mapping, StandardCharsets.UTF_8);
+      
+      // 2) Run RMLMapper in-process, capture stdout RDF
+      byte[] rdfBytes = runRmlMapperCaptureStdout(tempMapping, serialization);
+      
+      // 3) POST to server
+      String contentType = contentTypeFor(serialization);
+      
+      HttpClient client = HttpClient.newBuilder()
+      .connectTimeout(Duration.ofSeconds(20))
+      .build();
+      // ... inside main(), after rdfBytes/contentType/client are built:
+      
+      HttpRequest.Builder req = HttpRequest.newBuilder()
+      .uri(postUrl)
+      .timeout(Duration.ofMinutes(2))
+      .header("Content-Type", contentType)
+      .POST(HttpRequest.BodyPublishers.ofByteArray(rdfBytes));
+      
+      if (bearerToken != null && !bearerToken.isBlank()) {
+        req.header("Authorization", "Bearer " + bearerToken);
+      }
+      
+      HttpResponse<byte[]> resp = client.send(req.build(), HttpResponse.BodyHandlers.ofByteArray());
+      
+      System.err.println("POST " + postUrl + " -> HTTP " + resp.statusCode());
+      
+      // if (resp.body() != null && !resp.body().isBlank()) {
+      //   System.err.println(resp.body());
+      // }
+      
+      // Extract Location header (case-insensitive), resolve relative URI if needed
+      URI locationUri = extractLocationUri(resp, postUrl);
+      
+      if (locationUri == null) {
+        System.err.println("No Location header returned; skipping updateFeed().");
+        return;
+      }
+      
+      System.err.println("Location: " + locationUri);
+      String updateString = createUpdateString(
+        locationUri,
+        inputUrl,
+        title,
+        description,
+        keywords,
+        ontologies,
+        shapes,
+        feedUrl
+      );
 
-    // Start feed update process: GET -> append updateString -> PUT back
-    updateFeed(client, feedUrl, bearerToken, updateString);
-    
-    // cleanup
-    Files.deleteIfExists(tempMapping);
-    
+      // Start feed update process: GET -> append updateString -> PUT back
+      updateFeed(client, feedUrl, bearerToken, updateString);
+      
+      // cleanup
+      Files.deleteIfExists(tempMapping);
+    }
   }
   
   private static Map<String, List<String>> parseArgsMulti(String[] args) {
