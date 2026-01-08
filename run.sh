@@ -36,6 +36,7 @@ set -- \
 [ -n "${keywords:-}" ]     && set -- "$@" --keywords "$keywords"
 [ -n "${ontologies:-}" ]   && set -- "$@" --ontologies "$ontologies"
 [ -n "${shapes:-}" ]       && set -- "$@" --shapes "$shapes"
+[ -n "${profile:-}" ]      && set -- "$@" --profile "$profile"
 [ -n "$bearer" ]           && set -- "$@" --bearer "$bearer"
 
 echo "Launching jar with args:" >&2

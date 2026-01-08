@@ -32,6 +32,8 @@ public final class RmlMapAndPost {
     String title         = getSingle(a, "--title"); // optional
     String description   = getSingle(a, "--description"); // optional
 
+    String profile       = getSingle(a, "--profile");
+
     List<String> keywords   = getMulti(a, "--keywords");
     List<String> ontologies = getMulti(a, "--ontologies");
     List<String> shapes     = getMulti(a, "--shapes");
@@ -43,6 +45,7 @@ public final class RmlMapAndPost {
     System.err.println("keywords=" + keywords);
     System.err.println("ontologies=" + ontologies);
     System.err.println("shapes=" + shapes);
+    System.err.println("profile=" + profile);
 
 
     
@@ -95,7 +98,8 @@ public final class RmlMapAndPost {
       keywords,
       ontologies,
       shapes,
-      feedUrl
+      feedUrl,
+      profile
     );
 
     // Start feed update process: GET -> append updateString -> PUT back
@@ -234,7 +238,8 @@ public final class RmlMapAndPost {
     List<String> keywordArray,
     List<String> ontologyUrls,
     List<String> validationUrls,
-    URI feedId
+    URI feedId,
+    String profile
   ) {
     TimeZone tz = TimeZone.getTimeZone("UTC");
     DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
@@ -252,8 +257,7 @@ public final class RmlMapAndPost {
     for (String keyword: keywordArray) {
       keywords += "\"" + keyword + "\", ";
     }
-    
-    keywords = keywords.substring(0, keywords.length() - 2);
+    if (keywords.length() > 3) { keywords = keywords.substring(0, keywords.length() - 2); }
     
     String updateString = 
 """
@@ -287,14 +291,7 @@ public final class RmlMapAndPost {
   _:turtle_format a dct:MediaTypeOrExtent ;
     dct:identifier "text/turtle" ;
     rdfs:label "RDF Turtle"@en .
-    
-  ##########################################
-  # Profile entry for <%s>
-  ##########################################
-    
-  <%s>
-    a prof:Profile ;
-    dct:title "Content profile for %s"@en ;
+
 """;
     updateString = String.format(
       updateString, 
@@ -307,53 +304,84 @@ public final class RmlMapAndPost {
       title,
       description,
       keywords,
-      newResourceLocation.toString(),
-      datasetUrl,
-      profileId,
-      datasetUrl
+      newResourceLocation.toString()
     );
-    
-    for (String ontologyUrl: ontologyUrls) {
-      String ontologyString = 
-"""
-    # --- Used ontologies ---
-    prof:hasResource [
-      a prof:ResourceDescriptor ;
-      prof:hasRole <http://www.w3.org/ns/dx/prof/role/vocabulary> ;
-      prof:hasArtifact <%s> ;
-      dct:format "text/turtle" ;
-      dcat:mediaType "text/turtle" 
-    ] ;
-""";
-      ontologyString = String.format(ontologyString, ontologyUrl);
-      updateString += ontologyString;
+
+    if (profile == null) {
+      String profileHeader =
+  """
+      
+    ##########################################
+    # Profile entry for <%s>
+    ##########################################
+      
+    <%s>
+      a prof:Profile ;
+      dct:title "Content profile for %s"@en ;
+  """;
+        profileHeader = String.format(
+          profileHeader,
+          datasetUrl,
+          profileId,
+          datasetUrl
+        );
+        updateString += profileHeader;
+        
+        for (String ontologyUrl: ontologyUrls) {
+          String ontologyString = 
+  """
+      # --- Used ontologies ---
+      prof:hasResource [
+        a prof:ResourceDescriptor ;
+        prof:hasRole <http://www.w3.org/ns/dx/prof/role/vocabulary> ;
+        prof:hasArtifact <%s> ;
+        dct:format "text/turtle" ;
+        dcat:mediaType "text/turtle" 
+      ] ;
+  """;
+          ontologyString = String.format(ontologyString, ontologyUrl);
+          updateString += ontologyString;
+        }
+        
+        for (String validationUrl: validationUrls) {
+          String validationString = 
+  """
+      # --- Validation info ---
+      prof:hasResource [
+        a prof:ResourceDescriptor ;
+        prof:hasRole <http://www.w3.org/ns/dx/prof/role/validation> ;
+        prof:hasArtifact <%s> ;
+        dct:format "text/turtle" ;
+        dcat:mediaType "text/turtle" 
+      ] .
+  """;
+          validationString = String.format(validationString, validationUrl);
+          updateString += validationString;
+        }
+
+      String profileLinks = 
+  """
+    # --- Profile link ---
+    <%s> dct:conformsTo <%s> .
+    <%s> tree:member <%s> .
+  }
+  """;
+      profileLinks = String.format(profileLinks, datasetUrl, profileId, feedId, creation_id);
+      updateString += profileLinks;
+    } else {
+      String profileLinks = 
+  """
+    # --- Profile link ---
+    <%s> dct:conformsTo <%s> .
+    <%s> tree:member <%s> .
+  }
+  """;
+      profileLinks = String.format(profileLinks, datasetUrl, profile, feedId, creation_id);
+      updateString += profileLinks;
     }
+
+   
     
-    for (String validationUrl: validationUrls) {
-      String validationString = 
-"""
-    # --- Validation info ---
-    prof:hasResource [
-      a prof:ResourceDescriptor ;
-      prof:hasRole <http://www.w3.org/ns/dx/prof/role/validation> ;
-      prof:hasArtifact <%s> ;
-      dct:format "text/turtle" ;
-      dcat:mediaType "text/turtle" 
-    ] .
-""";
-      validationString = String.format(validationString, validationUrl);
-      updateString += validationString;
-    }
-    
-    String profileLinks = 
-"""
-  # --- Profile link ---
-  <%s> dct:conformsTo <%s> .
-  <%s> tree:member <%s> .
-}
-""";
-    profileLinks = String.format(profileLinks, datasetUrl, profileId, feedId, creation_id);
-    updateString += profileLinks;
     return updateString;
   }
   
